@@ -13,6 +13,9 @@ jobs:
     timeout-minutes: 25
     permissions:
       contents: write
+    env:
+      RELEASE_TAG: android-latest
+      RELEASE_NAME: Android latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,6 +40,15 @@ jobs:
         with:
           name: app-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload APK to GitHub release
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_NAME }}
+          files: app/build/outputs/apk/debug/app-debug.apk
+          overwrite_files: true
 
       - name: Commit and push APK
         if: github.event_name != 'pull_request'
