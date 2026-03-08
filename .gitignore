@@ -3,8 +3,6 @@
 .idea/
 build/
 app/build/
-spanishoverlay/build/
-spanishoverlay/app/build/
 local.properties
 *.iml
 *.apk
