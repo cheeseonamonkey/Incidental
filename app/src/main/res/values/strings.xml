@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">SpanishOverlay</string>
+    <string name="service_label">Spanish Overlay Service</string>
+    <string name="accessibility_description">Reads visible text and overlays Spanish translations to help you learn vocabulary passively.</string>
+</resources>

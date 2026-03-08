@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:padding="16dp">
+
+        <!-- Status Card -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/status_card"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp" app:cardElevation="2dp" app:cardCornerRadius="8dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:padding="16dp">
+                <TextView android:id="@+id/status_text"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textSize="16sp" android:textStyle="bold" />
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_open_a11y"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp" android:text="@string/enable_service"
+                    style="@style/Widget.Material3.Button.TonalButton" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Battery Warning -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/battery_warning_card"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp" app:cardBackgroundColor="@color/warning_bg"
+            app:cardElevation="1dp" app:cardCornerRadius="8dp" android:visibility="gone">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:padding="12dp" android:text="@string/battery_warning"
+                android:textColor="#FF6D4C41" />
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Frequency Section -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="@string/section_frequency" android:textSize="14sp"
+            android:textStyle="bold" android:layout_marginTop="8dp" android:layout_marginBottom="8dp" />
+        <RadioGroup android:id="@+id/rg_count_mode"
+            android:layout_width="match_parent" android:layout_height="wrap_content">
+            <RadioButton android:id="@+id/rb_fraction" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:text="@string/mode_fraction" />
+            <RadioButton android:id="@+id/rb_fixed" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:text="@string/mode_fixed" />
+        </RadioGroup>
+        <TextView android:id="@+id/label_every_n"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginTop="4dp" />
+        <SeekBar android:id="@+id/seekbar_replace_n"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:max="18" android:progress="3" />
+        <TextView android:id="@+id/label_fixed_count"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginTop="4dp" />
+        <SeekBar android:id="@+id/seekbar_fixed_count"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:max="9" android:progress="1" />
+
+        <!-- Filter Section -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="@string/section_filter" android:textSize="14sp"
+            android:textStyle="bold" android:layout_marginTop="16dp" android:layout_marginBottom="8dp" />
+        <TextView android:id="@+id/label_word_length"
+            android:layout_width="wrap_content" android:layout_height="wrap_content" />
+        <SeekBar android:id="@+id/seekbar_min_length"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:max="10" android:progress="3" />
+        <TextView android:id="@+id/label_complexity"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" />
+        <SeekBar android:id="@+id/seekbar_complexity_max"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:max="3" android:progress="3" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:layout_marginTop="8dp">
+            <CheckBox android:id="@+id/cb_noun" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:text="Noun" android:checked="true" />
+            <CheckBox android:id="@+id/cb_verb" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:text="Verb" android:checked="true" />
+            <CheckBox android:id="@+id/cb_adj" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:text="Adj" android:checked="true" />
+            <CheckBox android:id="@+id/cb_adv" android:layout_width="wrap_content"
+                android:layout_height="wrap_content" android:text="Adv" />
+        </LinearLayout>
+
+        <!-- Appearance Section -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="@string/section_appearance" android:textSize="14sp"
+            android:textStyle="bold" android:layout_marginTop="16dp" android:layout_marginBottom="8dp" />
+        <TextView android:id="@+id/label_alpha"
+            android:layout_width="wrap_content" android:layout_height="wrap_content" />
+        <SeekBar android:id="@+id/seekbar_alpha"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:max="100" android:progress="85" />
+        <TextView android:id="@+id/label_ttl"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" />
+        <SeekBar android:id="@+id/seekbar_ttl"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:max="19" android:progress="6" />
+
+        <!-- Stop Words (Compose) -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="@string/section_stop_words" android:textSize="14sp"
+            android:textStyle="bold" android:layout_marginTop="16dp" android:layout_marginBottom="8dp" />
+        <androidx.compose.ui.platform.ComposeView
+            android:id="@+id/compose_stop_words"
+            android:layout_width="match_parent" android:layout_height="240dp" />
+
+        <!-- Advanced Section -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="@string/section_advanced" android:textSize="14sp"
+            android:textStyle="bold" android:layout_marginTop="16dp" android:layout_marginBottom="8dp" />
+        <TextView android:id="@+id/label_debounce"
+            android:layout_width="wrap_content" android:layout_height="wrap_content" />
+        <SeekBar android:id="@+id/seekbar_debounce"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:max="19" android:progress="5" />
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_reset"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:text="@string/reset_defaults"
+            style="@style/Widget.Material3.Button.OutlinedButton" />
+
+        <!-- Excluded Apps (Compose) -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="@string/section_excluded_apps" android:textSize="14sp"
+            android:textStyle="bold" android:layout_marginTop="16dp" android:layout_marginBottom="8dp" />
+        <androidx.compose.ui.platform.ComposeView
+            android:id="@+id/compose_excluded_apps"
+            android:layout_width="match_parent" android:layout_height="240dp" />
+
+        <!-- Bottom spacer -->
+        <View android:layout_width="1dp" android:layout_height="32dp" />
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>
