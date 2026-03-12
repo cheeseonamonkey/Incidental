@@ -5,11 +5,10 @@ import android.view.accessibility.AccessibilityNodeInfo
 
 class NodeWalker(private val maxDepth: Int = 15) {
 
-    private val SKIP_CLASSES = setOf(
+    private val SKIP_CAPTURE_CLASSES = setOf(
         "android.widget.EditText",
         "android.widget.AutoCompleteTextView",
-        "android.inputmethodservice.ExtractEditText",
-        "androidx.compose.ui.platform.ComposeView"
+        "android.inputmethodservice.ExtractEditText"
     )
 
     fun walk(root: AccessibilityNodeInfo): List<NodeSnapshot> {
@@ -22,19 +21,18 @@ class NodeWalker(private val maxDepth: Int = 15) {
         while (queue.isNotEmpty()) {
             val (node, depth) = queue.removeFirst()
             val cls = node.className?.toString()
+            val isEditable = cls in SKIP_CAPTURE_CLASSES || node.isEditable
 
-            val skip = depth > maxDepth
+            val skipSubtree = depth > maxDepth
                 || !node.isVisibleToUser
-                || cls in SKIP_CLASSES
                 || node.isPassword
-                || node.isFocused
 
-            if (!skip) {
-                val text = node.text?.toString()
+            if (!skipSubtree) {
+                val text = (node.text?.toString() ?: node.contentDescription?.toString())?.trim()
                 val isLeaf = node.childCount == 0
                 // Capture text from leaves always; from non-leaves only if no child has text
                 // (avoids duplicating parent text that's really from a child)
-                val shouldCapture = !text.isNullOrBlank() && (isLeaf || !hasChildWithText(node))
+                val shouldCapture = !isEditable && !text.isNullOrBlank() && (isLeaf || !hasChildWithText(node))
                 if (shouldCapture) {
                     val bounds = Rect()
                     node.getBoundsInScreen(bounds)
@@ -61,7 +59,7 @@ class NodeWalker(private val maxDepth: Int = 15) {
     private fun hasChildWithText(node: AccessibilityNodeInfo): Boolean {
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
-            val has = !child.text.isNullOrBlank()
+            val has = !child.text.isNullOrBlank() || !child.contentDescription.isNullOrBlank()
             try { child.recycle() } catch (_: Exception) {}
             if (has) return true
         }

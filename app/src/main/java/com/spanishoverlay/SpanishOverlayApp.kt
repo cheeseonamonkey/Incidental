@@ -15,7 +15,7 @@ class SpanishOverlayApp : Application() {
         super.onCreate()
         INSTANCE = this
         appScope.launch {
-            SpanishDictionary.load(applicationContext)
+            SpanishDictionary.ensureLoaded(applicationContext)
             Log.d("SpanishOverlay", "Dictionary: ${SpanishDictionary.size()} entries")
         }
     }

@@ -1,3 +1,3 @@
 package com.spanishoverlay.data
 
-enum class CountMode { FRACTION, FIXED }
+enum class CountMode { FRACTION, FIXED, ALL }

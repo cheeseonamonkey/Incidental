@@ -16,24 +16,27 @@ data class OverlayConfig(
     val complexityMin: Int = 0,
     val complexityMax: Int = 3,
     val phrasesEnabled: Boolean = true,
+    val normalizationEnabled: Boolean = true,
+    val repeatRecentWeight: Float = 0.35f,
     // Timing
     val overlayTtlMs: Int = 4000,
     val fadeInMs: Int = 200,
     val fadeOutMs: Int = 400,
-    val showDelayMinMs: Int = 0,
-    val showDelayMaxMs: Int = 200,
+    val showDelayMs: Int = 200,
     val debounceMs: Int = 300,
+    val rescanAfterClearEvents: Boolean = true,
     // Appearance
     val overlayAlpha: Float = 0.85f,
     val fontScale: Float = 1.0f,
     val overlayTextColor: Int = 0xFFFFFFFF.toInt(),
     val overlayBgColor: Int = 0xCC141428.toInt(),
     val maxOverlays: Int = 20,
+    val allowOverlayOverlap: Boolean = false,
+    val selectedTextActionsEnabled: Boolean = true,
     val displayMode: DisplayMode = DisplayMode.ENGLISH_ARROW_SPANISH,
     val overlayPosition: OverlayPosition = OverlayPosition.ABOVE,
     val verticalOffsetDp: Int = 0,
     // Apps
-    val includeHiddenViews: Boolean = false,
     val excludePackages: Set<String> = emptySet()
 ) {
     companion object {
@@ -96,55 +99,108 @@ data class OverlayConfig(
             complexityMin = prefs.getInt("complexity_min", 0),
             complexityMax = prefs.getInt("complexity_max", 3),
             phrasesEnabled = prefs.getBoolean("phrases_enabled", true),
+            normalizationEnabled = prefs.getBoolean("normalization_enabled", true),
+            repeatRecentWeight = prefs.getFloat("repeat_recent_weight", 0.35f),
             overlayTtlMs = prefs.getInt("overlay_ttl_ms", 4000),
             fadeInMs = prefs.getInt("fade_in_ms", 200),
             fadeOutMs = prefs.getInt("fade_out_ms", 400),
-            showDelayMinMs = prefs.getInt("show_delay_min_ms", 0),
-            showDelayMaxMs = prefs.getInt("show_delay_max_ms", 200),
+            showDelayMs = prefs.getInt("show_delay_ms",
+                maxOf(prefs.getInt("show_delay_min_ms", 0), prefs.getInt("show_delay_max_ms", 200))),
             debounceMs = prefs.getInt("debounce_ms", 300),
+            rescanAfterClearEvents = prefs.getBoolean("rescan_after_clear_events", true),
             overlayAlpha = prefs.getFloat("overlay_alpha", 0.85f),
             fontScale = prefs.getFloat("font_scale", 1.0f),
             overlayTextColor = prefs.getInt("overlay_text_color", 0xFFFFFFFF.toInt()),
             overlayBgColor = prefs.getInt("overlay_bg_color", 0xCC141428.toInt()),
             maxOverlays = prefs.getInt("max_overlays", 20),
+            allowOverlayOverlap = prefs.getBoolean("allow_overlay_overlap", false),
+            selectedTextActionsEnabled = prefs.getBoolean("selected_text_actions_enabled", true),
             displayMode = pstr(prefs, "display_mode", "ENGLISH_ARROW_SPANISH") { DisplayMode.valueOf(it) } ?: DisplayMode.ENGLISH_ARROW_SPANISH,
             overlayPosition = pstr(prefs, "overlay_position", "ABOVE") { OverlayPosition.valueOf(it) } ?: OverlayPosition.ABOVE,
             verticalOffsetDp = prefs.getInt("vertical_offset_dp", 0),
-            includeHiddenViews = prefs.getBoolean("include_hidden_views", false),
             excludePackages = prefs.getStringSet("exclude_packages", emptySet()) ?: emptySet()
-        )
+        ).normalized()
 
         private fun <T> pstr(prefs: SharedPreferences, key: String, default: String, parse: (String) -> T): T? =
             runCatching { parse(prefs.getString(key, default) ?: default) }.getOrNull()
     }
 
-    fun persist(prefs: SharedPreferences) = prefs.edit().apply {
-        putInt("replace_every_n", replaceEveryN)
-        putString("replace_count_mode", replaceCountMode.name)
-        putInt("replace_fixed_count", replaceFixedCount)
-        putInt("min_word_length", minWordLength)
-        putInt("max_word_length", maxWordLength)
-        putBoolean("stop_words_enabled", stopWordsEnabled)
-        putStringSet("stop_words", stopWords)
-        putStringSet("enabled_pos", enabledPos.map { it.name }.toSet())
-        putInt("complexity_min", complexityMin)
-        putInt("complexity_max", complexityMax)
-        putBoolean("phrases_enabled", phrasesEnabled)
-        putInt("overlay_ttl_ms", overlayTtlMs)
-        putInt("fade_in_ms", fadeInMs)
-        putInt("fade_out_ms", fadeOutMs)
-        putInt("show_delay_min_ms", showDelayMinMs)
-        putInt("show_delay_max_ms", showDelayMaxMs)
-        putInt("debounce_ms", debounceMs)
-        putFloat("overlay_alpha", overlayAlpha)
-        putFloat("font_scale", fontScale)
-        putInt("overlay_text_color", overlayTextColor)
-        putInt("overlay_bg_color", overlayBgColor)
-        putInt("max_overlays", maxOverlays)
-        putString("display_mode", displayMode.name)
-        putString("overlay_position", overlayPosition.name)
-        putInt("vertical_offset_dp", verticalOffsetDp)
-        putBoolean("include_hidden_views", includeHiddenViews)
-        putStringSet("exclude_packages", excludePackages)
-    }.apply()
+    fun normalized(): OverlayConfig {
+        val pos = enabledPos.ifEmpty { setOf(PoS.NOUN, PoS.VERB, PoS.ADJECTIVE) }
+        return copy(
+            replaceEveryN = replaceEveryN.coerceIn(1, 50),
+            replaceFixedCount = replaceFixedCount.coerceIn(0, 30),
+            minWordLength = minWordLength.coerceIn(1, 30),
+            maxWordLength = maxWordLength.coerceIn(minWordLength.coerceIn(1, 30), 40),
+            enabledPos = pos,
+            complexityMin = complexityMin.coerceIn(0, 3),
+            complexityMax = complexityMax.coerceIn(complexityMin.coerceIn(0, 3), 3),
+            repeatRecentWeight = repeatRecentWeight.coerceIn(0f, 1f),
+            overlayTtlMs = overlayTtlMs.coerceIn(500, 30000),
+            fadeInMs = fadeInMs.coerceIn(0, 1000),
+            fadeOutMs = fadeOutMs.coerceIn(0, 1000),
+            showDelayMs = showDelayMs.coerceIn(0, 2000),
+            debounceMs = debounceMs.coerceIn(50, 2000),
+            overlayAlpha = overlayAlpha.coerceIn(0.2f, 1f),
+            fontScale = fontScale.coerceIn(0.7f, 2f),
+            maxOverlays = maxOverlays.coerceIn(1, 200)
+        )
+    }
+
+    fun intensityValue(): Float = when (replaceCountMode) {
+        CountMode.FRACTION -> (21 - replaceEveryN.coerceIn(2, 20)).toFloat()
+        CountMode.FIXED -> (19 + replaceFixedCount.coerceIn(1, 30)).toFloat()
+        CountMode.ALL -> 50f
+    }
+
+    fun intensityLabel(): String = when (replaceCountMode) {
+        CountMode.FRACTION -> "Learning intensity: every $replaceEveryN words"
+        CountMode.FIXED -> "Learning intensity: $replaceFixedCount per screen"
+        CountMode.ALL -> "Learning intensity: all eligible words"
+    }
+
+    fun withIntensity(value: Float): OverlayConfig {
+        val step = value.toInt().coerceIn(1, 50)
+        return when {
+            step <= 19 -> copy(replaceCountMode = CountMode.FRACTION, replaceEveryN = (21 - step).coerceIn(2, 20))
+            step <= 49 -> copy(replaceCountMode = CountMode.FIXED, replaceFixedCount = (step - 19).coerceIn(1, 30))
+            else -> copy(replaceCountMode = CountMode.ALL)
+        }
+    }
+
+    fun persist(prefs: SharedPreferences) {
+        val c = normalized()
+        prefs.edit().apply {
+            putInt("replace_every_n", c.replaceEveryN)
+            putString("replace_count_mode", c.replaceCountMode.name)
+            putInt("replace_fixed_count", c.replaceFixedCount)
+            putInt("min_word_length", c.minWordLength)
+            putInt("max_word_length", c.maxWordLength)
+            putBoolean("stop_words_enabled", c.stopWordsEnabled)
+            putStringSet("stop_words", c.stopWords)
+            putStringSet("enabled_pos", c.enabledPos.map { it.name }.toSet())
+            putInt("complexity_min", c.complexityMin)
+            putInt("complexity_max", c.complexityMax)
+            putBoolean("phrases_enabled", c.phrasesEnabled)
+            putBoolean("normalization_enabled", c.normalizationEnabled)
+            putFloat("repeat_recent_weight", c.repeatRecentWeight)
+            putInt("overlay_ttl_ms", c.overlayTtlMs)
+            putInt("fade_in_ms", c.fadeInMs)
+            putInt("fade_out_ms", c.fadeOutMs)
+            putInt("show_delay_ms", c.showDelayMs)
+            putInt("debounce_ms", c.debounceMs)
+            putBoolean("rescan_after_clear_events", c.rescanAfterClearEvents)
+            putFloat("overlay_alpha", c.overlayAlpha)
+            putFloat("font_scale", c.fontScale)
+            putInt("overlay_text_color", c.overlayTextColor)
+            putInt("overlay_bg_color", c.overlayBgColor)
+            putInt("max_overlays", c.maxOverlays)
+            putBoolean("allow_overlay_overlap", c.allowOverlayOverlap)
+            putBoolean("selected_text_actions_enabled", c.selectedTextActionsEnabled)
+            putString("display_mode", c.displayMode.name)
+            putString("overlay_position", c.overlayPosition.name)
+            putInt("vertical_offset_dp", c.verticalOffsetDp)
+            putStringSet("exclude_packages", c.excludePackages)
+        }.apply()
+    }
 }

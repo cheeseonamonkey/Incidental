@@ -22,34 +22,41 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.spanishoverlay.data.ConfigRepository
-import com.spanishoverlay.data.CountMode
 import com.spanishoverlay.data.DisplayMode
-import com.spanishoverlay.data.DictionaryEntry
+import com.spanishoverlay.data.LearningEntry
+import com.spanishoverlay.data.LearningRepository
+import com.spanishoverlay.data.LearningSelection
+import com.spanishoverlay.data.LearningStats
 import com.spanishoverlay.data.OverlayConfig
 import com.spanishoverlay.data.OverlayPosition
 import com.spanishoverlay.data.PoS
 import com.spanishoverlay.service.SpanishOverlayService
 import com.spanishoverlay.util.isAccessibilityServiceEnabled
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val repo = ConfigRepository.getInstance(this)
+        val learning = LearningRepository.getInstance(this)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    SettingsScreen(repo)
+                    SettingsScreen(repo, learning)
                 }
             }
         }
@@ -57,14 +64,30 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun SettingsScreen(repo: ConfigRepository) {
+fun SettingsScreen(repo: ConfigRepository, learning: LearningRepository) {
     val ctx = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val cfg by repo.configFlow.collectAsState()
+    val stats by learning.statsFlow.collectAsState()
+    val recent by learning.recentFlow.collectAsState()
+    val prioritized by learning.prioritizedFlow.collectAsState()
+    val ignored by learning.ignoredFlow.collectAsState()
+    val selection by learning.selectionFlow.collectAsState()
+    val uiScope = rememberCoroutineScope()
     var serviceOn by remember { mutableStateOf(false) }
+    var showAdvanced by rememberSaveable { mutableStateOf(false) }
 
-    // Refresh service status on each recomposition trigger
-    LaunchedEffect(Unit) {
+    LaunchedEffect(lifecycleOwner) {
         serviceOn = ctx.isAccessibilityServiceEnabled(SpanishOverlayService::class.java)
+    }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                serviceOn = ctx.isAccessibilityServiceEnabled(SpanishOverlayService::class.java)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     LazyColumn(
@@ -101,42 +124,32 @@ fun SettingsScreen(repo: ConfigRepository) {
                 repo.update { preset.copy(stopWords = cfg.stopWords, excludePackages = cfg.excludePackages) }
             }
         }
-
-        // Frequency
-        item { SectionHeader("Replacement Frequency") }
+        item { LearningStatsCard(stats) }
         item {
-            SegmentedControl(
-                options = listOf("Every N Words", "Fixed Count"),
-                selected = if (cfg.replaceCountMode == CountMode.FRACTION) 0 else 1
-            ) { repo.update { copy(replaceCountMode = if (it == 0) CountMode.FRACTION else CountMode.FIXED) } }
+            SelectionActionCard(selection,
+                onPrioritize = { uiScope.launch { learning.prioritize(it); learning.setSelection(null) } },
+                onIgnore = { uiScope.launch { learning.ignore(it); learning.setSelection(null) } },
+                onKnown = { uiScope.launch { learning.markKnown(it); learning.setSelection(null) } },
+                onDismiss = { learning.setSelection(null) }
+            )
         }
-        item {
-            if (cfg.replaceCountMode == CountMode.FRACTION) {
-                LabeledSlider("Every ${cfg.replaceEveryN} words", cfg.replaceEveryN.toFloat(), 2f, 20f) {
-                    repo.update { copy(replaceEveryN = it.toInt()) }
-                }
-            } else {
-                LabeledSlider("Replace ${cfg.replaceFixedCount} per screen", cfg.replaceFixedCount.toFloat(), 1f, 15f) {
-                    repo.update { copy(replaceFixedCount = it.toInt()) }
-                }
-            }
-        }
+        item { LearningListCard("Recent Words", recent) { learning.setSelection(it.toSelection()) } }
+        item { LearningListCard("Prioritized", prioritized) { learning.setSelection(it.toSelection()) } }
+        item { LearningListCard("Ignored", ignored) { learning.setSelection(it.toSelection()) } }
 
-        // Filters
-        item { SectionHeader("Word Filters") }
+        item { SectionHeader("Learning") }
         item {
-            LabeledSlider("Min length: ${cfg.minWordLength}", cfg.minWordLength.toFloat(), 2f, 12f) {
-                repo.update { copy(minWordLength = it.toInt().coerceAtMost(maxWordLength)) }
+            LabeledSlider(cfg.intensityLabel(), cfg.intensityValue(), 1f, 50f) {
+                repo.update { withIntensity(it) }
             }
         }
         item {
             val labels = listOf("Essential", "Common", "Intermediate", "Advanced")
             LabeledSlider("Max complexity: ${labels.getOrElse(cfg.complexityMax) { "Advanced" }}",
                 cfg.complexityMax.toFloat(), 0f, 3f) {
-                repo.update { copy(complexityMax = it.toInt().coerceAtLeast(complexityMin)) }
+                repo.update { copy(complexityMax = it.toInt().coerceAtLeast(cfg.complexityMin)) }
             }
         }
-        item { PosCheckboxRow(cfg) { repo.update(it) } }
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = cfg.phrasesEnabled, onCheckedChange = { repo.update { copy(phrasesEnabled = it) } })
@@ -150,7 +163,6 @@ fun SettingsScreen(repo: ConfigRepository) {
             }
         }
 
-        // Appearance
         item { SectionHeader("Appearance") }
         item {
             SegmentedControl(
@@ -180,11 +192,6 @@ fun SettingsScreen(repo: ConfigRepository) {
             }
         }
         item {
-            LabeledSlider("Max overlays: ${cfg.maxOverlays}", cfg.maxOverlays.toFloat(), 1f, 40f) {
-                repo.update { copy(maxOverlays = it.toInt()) }
-            }
-        }
-        item {
             Text("Text color", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 4.dp))
             ColorPickerRow(OverlayConfig.TEXT_COLORS, cfg.overlayTextColor) {
                 repo.update { copy(overlayTextColor = it) }
@@ -204,34 +211,106 @@ fun SettingsScreen(repo: ConfigRepository) {
                 repo.update { copy(overlayTtlMs = it.toInt()) }
             }
         }
+        item { SectionHeader("Advanced") }
         item {
-            LabeledSlider("Fade in: ${cfg.fadeInMs}ms", cfg.fadeInMs.toFloat(), 0f, 800f) {
-                repo.update { copy(fadeInMs = it.toInt()) }
-            }
+            Text(
+                "Density, fine-tuning, and per-app controls live here.",
+                fontSize = 12.sp,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
         }
         item {
-            LabeledSlider("Fade out: ${cfg.fadeOutMs}ms", cfg.fadeOutMs.toFloat(), 0f, 1200f) {
-                repo.update { copy(fadeOutMs = it.toInt()) }
-            }
+            OutlinedButton(
+                onClick = { showAdvanced = !showAdvanced },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text(if (showAdvanced) "Hide Advanced Controls" else "Show Advanced Controls") }
         }
-        item {
-            LabeledSlider("Show delay jitter: 0–${cfg.showDelayMaxMs}ms", cfg.showDelayMaxMs.toFloat(), 0f, 1000f) {
-                repo.update { copy(showDelayMaxMs = it.toInt()) }
+        if (showAdvanced) {
+            item { SectionHeader("Overlay Density") }
+            item {
+                Text(
+                    "Push learning intensity to the max, then raise the limit and allow overlap to saturate the screen.",
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
             }
-        }
-        item {
-            LabeledSlider("Debounce: ${cfg.debounceMs}ms", cfg.debounceMs.toFloat(), 50f, 2000f) {
-                repo.update { copy(debounceMs = it.toInt()) }
+            item {
+                LabeledSlider("Max overlays: ${cfg.maxOverlays}", cfg.maxOverlays.toFloat(), 1f, 200f) {
+                    repo.update { copy(maxOverlays = it.toInt()) }
+                }
             }
-        }
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = cfg.allowOverlayOverlap, onCheckedChange = {
+                        repo.update { copy(allowOverlayOverlap = it) }
+                    })
+                    Text("Allow overlapping overlays", modifier = Modifier.padding(start = 4.dp))
+                }
+            }
 
-        // Stop words
-        item { SectionHeader("Stop Words") }
-        item { StopWordsEditor(cfg.stopWords) { repo.update { copy(stopWords = it) } } }
+            item { SectionHeader("Advanced Filters") }
+            item {
+                LabeledSlider("Min length: ${cfg.minWordLength}", cfg.minWordLength.toFloat(), 2f, 12f) {
+                    repo.update { copy(minWordLength = it.toInt().coerceAtMost(cfg.maxWordLength)) }
+                }
+            }
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = cfg.normalizationEnabled, onCheckedChange = {
+                        repo.update { copy(normalizationEnabled = it) }
+                    })
+                    Text("Light normalization for inflections", modifier = Modifier.padding(start = 4.dp))
+                }
+            }
+            item { PosCheckboxRow(cfg) { repo.update(it) } }
+            item { StopWordsEditor(cfg.stopWords) { repo.update { copy(stopWords = it) } } }
 
-        // Excluded apps
-        item { SectionHeader("Excluded Apps") }
-        item { ExcludedAppsEditor(cfg.excludePackages) { repo.update { copy(excludePackages = it) } } }
+            item { SectionHeader("Advanced Timing") }
+            item {
+                LabeledSlider("Fade in: ${cfg.fadeInMs}ms", cfg.fadeInMs.toFloat(), 0f, 800f) {
+                    repo.update { copy(fadeInMs = it.toInt()) }
+                }
+            }
+            item {
+                LabeledSlider("Fade out: ${cfg.fadeOutMs}ms", cfg.fadeOutMs.toFloat(), 0f, 1200f) {
+                    repo.update { copy(fadeOutMs = it.toInt()) }
+                }
+            }
+            item {
+                LabeledSlider("Show delay jitter: 0-${cfg.showDelayMs}ms", cfg.showDelayMs.toFloat(), 0f, 2000f) {
+                    repo.update { copy(showDelayMs = it.toInt()) }
+                }
+            }
+            item {
+                LabeledSlider("Debounce: ${cfg.debounceMs}ms", cfg.debounceMs.toFloat(), 50f, 2000f) {
+                    repo.update { copy(debounceMs = it.toInt()) }
+                }
+            }
+            item {
+                LabeledSlider("Recent repeat bias: ${(cfg.repeatRecentWeight * 100).toInt()}%", cfg.repeatRecentWeight, 0f, 1f) {
+                    repo.update { copy(repeatRecentWeight = it) }
+                }
+            }
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = cfg.rescanAfterClearEvents, onCheckedChange = {
+                        repo.update { copy(rescanAfterClearEvents = it) }
+                    })
+                    Text("Re-scan after scroll/window clear events", modifier = Modifier.padding(start = 4.dp))
+                }
+            }
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = cfg.selectedTextActionsEnabled, onCheckedChange = {
+                        repo.update { copy(selectedTextActionsEnabled = it) }
+                    })
+                    Text("Selected-text actions", modifier = Modifier.padding(start = 4.dp))
+                }
+            }
+
+            item { SectionHeader("Excluded Apps") }
+            item { ExcludedAppsEditor(cfg.excludePackages) { repo.update { copy(excludePackages = it) } } }
+        }
 
         // Reset
         item {
@@ -244,6 +323,77 @@ fun SettingsScreen(repo: ConfigRepository) {
         }
     }
 }
+
+@Composable
+fun LearningStatsCard(stats: LearningStats) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            StatPill("Seen", stats.totalSeen)
+            StatPill("Priority", stats.prioritized)
+            StatPill("Ignored", stats.ignored)
+            StatPill("Known", stats.known)
+        }
+    }
+}
+
+@Composable
+fun StatPill(label: String, value: Int) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value.toString(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(label, fontSize = 11.sp)
+    }
+}
+
+@Composable
+fun SelectionActionCard(
+    selection: LearningSelection?,
+    onPrioritize: (LearningSelection) -> Unit,
+    onIgnore: (LearningSelection) -> Unit,
+    onKnown: (LearningSelection) -> Unit,
+    onDismiss: () -> Unit
+) {
+    if (selection == null) return
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Selected Text", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+            Text("${selection.surface} -> ${selection.spanish}", fontWeight = FontWeight.Bold)
+            Text("Lemma: ${selection.english} (${selection.pos.name.lowercase()})", fontSize = 12.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { onPrioritize(selection) }, modifier = Modifier.weight(1f)) { Text("Prioritize") }
+                OutlinedButton(onClick = { onIgnore(selection) }, modifier = Modifier.weight(1f)) { Text("Ignore") }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { onKnown(selection) }, modifier = Modifier.weight(1f)) { Text("Mark Known") }
+                TextButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { Text("Dismiss") }
+            }
+        }
+    }
+}
+
+@Composable
+fun LearningListCard(title: String, entries: List<LearningEntry>, onSelect: (LearningEntry) -> Unit) {
+    if (entries.isEmpty()) return
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+            entries.take(6).forEach { entry ->
+                Text(
+                    "${entry.lastSurfaceForm} -> ${entry.spanish}",
+                    fontSize = 13.sp,
+                    modifier = Modifier.fillMaxWidth().clickable { onSelect(entry) }.padding(vertical = 2.dp)
+                )
+            }
+        }
+    }
+}
+
+private fun LearningEntry.toSelection() = LearningSelection(
+    key = key,
+    english = english,
+    spanish = spanish,
+    surface = lastSurfaceForm,
+    pos = runCatching { PoS.valueOf(pos) }.getOrDefault(PoS.OTHER)
+)
 
 @Composable
 fun StatusCard(serviceOn: Boolean, onEnable: () -> Unit) {
