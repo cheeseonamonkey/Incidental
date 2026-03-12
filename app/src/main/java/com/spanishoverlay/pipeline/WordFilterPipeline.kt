@@ -24,7 +24,7 @@ class WordFilterPipeline(
         val history = learning.snapshot()
 
         // Phase 1: phrase matching (greedy, longest-first)
-        if (cfg.phrasesEnabled && PoS.PHRASE in cfg.enabledPos) {
+        if (cfg.phrasesEnabled) {
             val lower = text.lowercase()
             for ((phrase, entry) in SpanishDictionary.phraseEntries()) {
                 var start = 0
@@ -33,7 +33,8 @@ class WordFilterPipeline(
                     if (idx < 0) break
                     val range = idx until idx + phrase.length
                     // Skip if overlaps existing match
-                    if (excludeRanges.none { it.first <= range.last && range.first <= it.last }) {
+                    if (isPhraseBoundary(lower, idx, phrase.length)
+                        && excludeRanges.none { it.first <= range.last && range.first <= it.last }) {
                         excludeRanges.add(range)
                         replacements.add(Replacement(entry.key, entry.english, entry.spanish, PoS.PHRASE, entry.complexity, phrase))
                         signals.add(entry.toSignal(phrase, surfaced = true))
@@ -102,6 +103,14 @@ class WordFilterPipeline(
             else -> 0.15f
         }
     }
+
+    private fun isPhraseBoundary(text: String, start: Int, length: Int): Boolean {
+        val before = text.getOrNull(start - 1)
+        val after = text.getOrNull(start + length)
+        return !before.isWordChar() && !after.isWordChar()
+    }
+
+    private fun Char?.isWordChar() = this?.isLetterOrDigit() == true
 
     private fun DictionaryEntry.toSignal(surface: String, surfaced: Boolean) =
         LearningSignal(key, english, spanish, pos, complexity, surface, surfaced)

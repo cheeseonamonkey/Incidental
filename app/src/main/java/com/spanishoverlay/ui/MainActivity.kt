@@ -282,7 +282,7 @@ fun SettingsScreen(repo: ConfigRepository, learning: LearningRepository) {
                 }
             }
             item {
-                LabeledSlider("Debounce: ${cfg.debounceMs}ms", cfg.debounceMs.toFloat(), 50f, 2000f) {
+                LabeledSlider("Scan delay after screen changes: ${cfg.debounceMs}ms", cfg.debounceMs.toFloat(), 50f, 2000f) {
                     repo.update { copy(debounceMs = it.toInt()) }
                 }
             }
