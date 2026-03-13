@@ -83,7 +83,7 @@ class OverlayManager(private val context: Context, private val config: ConfigRep
         ).also { it.gravity = Gravity.TOP or Gravity.START }
 
         val delayMs = if (cfg.showDelayMs > 0)
-            Random.nextInt(0, cfg.showDelayMs.coerceAtLeast(0) + 1).toLong()
+            Random.nextInt(0, cfg.showDelayMs + 1).toLong()
         else 0L
 
         val showTask = Runnable {

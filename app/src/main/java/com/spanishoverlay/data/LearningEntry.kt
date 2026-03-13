@@ -18,14 +18,17 @@ data class LearningEntry(
     val priority: Boolean,
     val ignored: Boolean,
     val known: Boolean,
-    val lastSurfaceForm: String = english
+    val lastSurfaceForm: String = english,
+    val nextReviewAt: Long = 0L
 )
 
 data class LearningStats(
     val totalSeen: Int = 0,
     val prioritized: Int = 0,
     val ignored: Int = 0,
-    val known: Int = 0
+    val known: Int = 0,
+    val todaySeen: Int = 0,
+    val streak: Int = 0
 )
 
 data class LearningSelection(

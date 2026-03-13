@@ -25,4 +25,7 @@ interface LearningHistoryDao {
 
     @Query("SELECT * FROM learning_entries WHERE `key` = :key LIMIT 1")
     suspend fun find(key: String): LearningEntry?
+
+    @Query("SELECT COUNT(*) FROM learning_entries WHERE firstSeenAt >= :startOfDay")
+    fun observeTodaySeen(startOfDay: Long): Flow<Int>
 }

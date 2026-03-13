@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
+import android.speech.tts.TextToSpeech
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -20,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -29,6 +31,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import java.util.Locale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
@@ -76,6 +79,14 @@ fun SettingsScreen(repo: ConfigRepository, learning: LearningRepository) {
     val uiScope = rememberCoroutineScope()
     var serviceOn by remember { mutableStateOf(false) }
     var showAdvanced by rememberSaveable { mutableStateOf(false) }
+    val tts = remember {
+        var ttsInstance: TextToSpeech? = null
+        ttsInstance = TextToSpeech(ctx) { status ->
+            if (status == TextToSpeech.SUCCESS) ttsInstance?.language = Locale("es", "ES")
+        }
+        ttsInstance
+    }
+    DisposableEffect(Unit) { onDispose { tts.shutdown() } }
 
     LaunchedEffect(lifecycleOwner) {
         serviceOn = ctx.isAccessibilityServiceEnabled(SpanishOverlayService::class.java)
@@ -105,18 +116,6 @@ fun SettingsScreen(repo: ConfigRepository, learning: LearningRepository) {
         // Battery warning
         item { BatteryWarningCard() }
 
-        // Overlay permission warning (API 23+)
-        item {
-            if (Build.VERSION.SDK_INT >= 23 && !Settings.canDrawOverlays(ctx)) {
-                WarningCard("Draw over apps permission required") {
-                    runCatching {
-                        ctx.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                            Uri.parse("package:${ctx.packageName}")))
-                    }
-                }
-            }
-        }
-
         // Presets
         item { SectionHeader("Quick Presets") }
         item {
@@ -126,7 +125,7 @@ fun SettingsScreen(repo: ConfigRepository, learning: LearningRepository) {
         }
         item { LearningStatsCard(stats) }
         item {
-            SelectionActionCard(selection,
+            SelectionActionCard(selection, tts,
                 onPrioritize = { uiScope.launch { learning.prioritize(it); learning.setSelection(null) } },
                 onIgnore = { uiScope.launch { learning.ignore(it); learning.setSelection(null) } },
                 onKnown = { uiScope.launch { learning.markKnown(it); learning.setSelection(null) } },
@@ -329,8 +328,9 @@ fun LearningStatsCard(stats: LearningStats) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             StatPill("Seen", stats.totalSeen)
+            StatPill("Today", stats.todaySeen)
+            StatPill("Streak", stats.streak)
             StatPill("Priority", stats.prioritized)
-            StatPill("Ignored", stats.ignored)
             StatPill("Known", stats.known)
         }
     }
@@ -347,6 +347,7 @@ fun StatPill(label: String, value: Int) {
 @Composable
 fun SelectionActionCard(
     selection: LearningSelection?,
+    tts: TextToSpeech,
     onPrioritize: (LearningSelection) -> Unit,
     onIgnore: (LearningSelection) -> Unit,
     onKnown: (LearningSelection) -> Unit,
@@ -356,7 +357,12 @@ fun SelectionActionCard(
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Selected Text", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-            Text("${selection.surface} -> ${selection.spanish}", fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("${selection.surface} -> ${selection.spanish}", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                IconButton(onClick = { tts.speak(selection.spanish, TextToSpeech.QUEUE_FLUSH, null, null) }) {
+                    Icon(Icons.Default.VolumeUp, contentDescription = "Pronounce")
+                }
+            }
             Text("Lemma: ${selection.english} (${selection.pos.name.lowercase()})", fontSize = 12.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 OutlinedButton(onClick = { onPrioritize(selection) }, modifier = Modifier.weight(1f)) { Text("Prioritize") }

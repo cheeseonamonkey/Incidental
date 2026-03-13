@@ -71,7 +71,8 @@ class WordFilterPipeline(
             CountMode.ALL -> eligible.sortedByDescending(Candidate::score)
         }
 
-        signals.addAll(eligible.map { it.entry.toSignal(it.token.clean, surfaced = it in selected) })
+        val selectedSet = selected.toHashSet()
+        signals.addAll(eligible.map { it.entry.toSignal(it.token.clean, surfaced = it in selectedSet) })
         replacements.addAll(selected.map { Replacement(it.entry.key, it.entry.english, it.entry.spanish, it.entry.pos, it.entry.complexity, it.token.clean) })
         learning.record(signals)
 
@@ -88,10 +89,12 @@ class WordFilterPipeline(
         val ignoredPenalty = if (state?.ignored == true) -100f else 0f
         val novelty = if (state == null) 3f else 0.5f / (state.surfacedCount + 1)
         val phraseBoost = if (entry.pos == PoS.PHRASE) 1.5f else 0f
+        val now = System.currentTimeMillis()
+        val srsBoost = if (state != null && state.nextReviewAt > 0L && state.nextReviewAt <= now) 2f else 0f
         val repeatBoost = if (state != null && state.lastSurfacedAt > 0L) cfg.repeatRecentWeight * recentBoost(state.lastSurfacedAt) else 0f
         val complexityBoost = entry.complexity * 0.15f
         val stableJitter = (kotlin.math.abs(token.clean.hashCode() xor entry.key.hashCode()) % 100) / 1000f
-        return priority + novelty + phraseBoost + repeatBoost + complexityBoost + stableJitter + knownPenalty + ignoredPenalty
+        return priority + novelty + phraseBoost + srsBoost + repeatBoost + complexityBoost + stableJitter + knownPenalty + ignoredPenalty
     }
 
     private fun recentBoost(lastSurfacedAt: Long): Float {

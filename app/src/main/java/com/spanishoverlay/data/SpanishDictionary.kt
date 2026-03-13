@@ -45,8 +45,6 @@ object SpanishDictionary {
         }
     }
 
-    fun load(context: Context) = ensureLoaded(context)
-
     fun phraseEntries(): List<Pair<String, DictionaryEntry>> = phraseIndex
 
     fun findAny(word: String, normalize: Boolean = true): DictionaryEntry? =

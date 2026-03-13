@@ -24,8 +24,7 @@ android {
     }
 }
 dependencies {
-    implementation("androidx.appcompat:appcompat:1.6.1")
-    implementation("androidx.core:core-ktx:1.12.0")
+implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     val bom = platform("androidx.compose:compose-bom:2024.02.00")
