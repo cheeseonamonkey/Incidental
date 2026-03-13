@@ -18,7 +18,7 @@ abstract class LearningHistoryDatabase : RoomDatabase() {
                     context.applicationContext,
                     LearningHistoryDatabase::class.java,
                     "learning_history.db"
-                ).fallbackToDestructiveMigration(dropAllTables = true).build().also { INSTANCE = it }
+                ).fallbackToDestructiveMigration().build().also { INSTANCE = it }
             }
     }
 }
