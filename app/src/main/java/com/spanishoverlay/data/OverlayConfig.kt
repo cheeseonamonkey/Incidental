@@ -35,13 +35,13 @@ data class OverlayConfig(
     val selectedTextActionsEnabled: Boolean = true,
     val displayMode: DisplayMode = DisplayMode.ENGLISH_ARROW_SPANISH,
     val overlayPosition: OverlayPosition = OverlayPosition.ABOVE,
+    val horizontalOffsetDp: Int = 0,
     val verticalOffsetDp: Int = 0,
+    val overlayGapDp: Int = 4,
     // Apps
     val excludePackages: Set<String> = emptySet()
 ) {
     companion object {
-        val DEFAULT = OverlayConfig()
-
         val DEFAULT_STOP_WORDS: Set<String> = setOf(
             "a","an","the","is","are","was","were","be","been","being",
             "have","has","had","do","does","did","will","would","could","should",
@@ -56,6 +56,7 @@ data class OverlayConfig(
             "no","only","same","very","just","also","even","still","here",
             "into","over","after","before","about","between"
         )
+        val DEFAULT = OverlayConfig()
 
         val TEXT_COLORS = listOf(
             0xFFFFFFFF.toInt(), 0xFFFFEB3B.toInt(), 0xFF00BCD4.toInt(),
@@ -117,7 +118,9 @@ data class OverlayConfig(
             selectedTextActionsEnabled = prefs.getBoolean("selected_text_actions_enabled", true),
             displayMode = pstr(prefs, "display_mode", "ENGLISH_ARROW_SPANISH") { DisplayMode.valueOf(it) } ?: DisplayMode.ENGLISH_ARROW_SPANISH,
             overlayPosition = pstr(prefs, "overlay_position", "ABOVE") { OverlayPosition.valueOf(it) } ?: OverlayPosition.ABOVE,
+            horizontalOffsetDp = prefs.getInt("horizontal_offset_dp", 0),
             verticalOffsetDp = prefs.getInt("vertical_offset_dp", 0),
+            overlayGapDp = prefs.getInt("overlay_gap_dp", 4),
             excludePackages = prefs.getStringSet("exclude_packages", emptySet()) ?: emptySet()
         ).normalized()
 
@@ -132,6 +135,7 @@ data class OverlayConfig(
             replaceFixedCount = replaceFixedCount.coerceIn(0, 30),
             minWordLength = minWordLength.coerceIn(1, 30),
             maxWordLength = maxWordLength.coerceIn(minWordLength.coerceIn(1, 30), 40),
+            stopWords = stopWords.map { it.trim().lowercase() }.filter { it.isNotBlank() }.toSet(),
             enabledPos = pos,
             complexityMin = complexityMin.coerceIn(0, 3),
             complexityMax = complexityMax.coerceIn(complexityMin.coerceIn(0, 3), 3),
@@ -143,7 +147,11 @@ data class OverlayConfig(
             debounceMs = debounceMs.coerceIn(50, 2000),
             overlayAlpha = overlayAlpha.coerceIn(0.2f, 1f),
             fontScale = fontScale.coerceIn(0.7f, 2f),
-            maxOverlays = maxOverlays.coerceIn(1, 200)
+            maxOverlays = maxOverlays.coerceIn(1, 200),
+            horizontalOffsetDp = horizontalOffsetDp.coerceIn(-60, 60),
+            verticalOffsetDp = verticalOffsetDp.coerceIn(-60, 60),
+            overlayGapDp = overlayGapDp.coerceIn(0, 24),
+            excludePackages = excludePackages.map { it.trim() }.filter { it.isNotBlank() }.toSet()
         )
     }
 
@@ -198,7 +206,9 @@ data class OverlayConfig(
             putBoolean("selected_text_actions_enabled", selectedTextActionsEnabled)
             putString("display_mode", displayMode.name)
             putString("overlay_position", overlayPosition.name)
+            putInt("horizontal_offset_dp", horizontalOffsetDp)
             putInt("vertical_offset_dp", verticalOffsetDp)
+            putInt("overlay_gap_dp", overlayGapDp)
             putStringSet("exclude_packages", excludePackages)
         }.apply()
     }

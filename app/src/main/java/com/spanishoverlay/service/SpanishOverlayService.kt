@@ -27,6 +27,7 @@ class SpanishOverlayService : AccessibilityService() {
         if (connected) return
         val cfg = ConfigRepository.getInstance(this)
         val learning = LearningRepository.getInstance(this)
+        val snapshot = cfg.snapshot()
         connected = true
         learningRepository = learning
         overlayManager = OverlayManager(this, cfg)
@@ -34,7 +35,8 @@ class SpanishOverlayService : AccessibilityService() {
         pipeline = WordFilterPipeline(cfg, learning)
         debouncer = EventDebouncer(cfg.debounceMsFlow, scope)
         scope.launch { cfg.configFlow.collect { currentConfig = it } }
-        Log.d("SpanishOverlay", "Service connected, dict=${SpanishDictionary.size()}")
+        currentConfig = snapshot
+        Log.d("SpanishOverlay", "Service connected, dict=${SpanishDictionary.size()}, mode=${snapshot.displayMode}, excluded=${snapshot.excludePackages.size}")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {

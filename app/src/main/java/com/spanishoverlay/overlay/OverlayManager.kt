@@ -27,7 +27,6 @@ class OverlayManager(private val context: Context, private val config: ConfigRep
     private val density by lazy { context.resources.displayMetrics.density.coerceAtLeast(1f) }
     private val minW by lazy { (40 * density).toInt().coerceAtLeast(80) }
     private val edgePad by lazy { (12 * density).toInt() }
-    private val gapPx by lazy { (4 * density).toInt() }
 
     data class ActiveOverlay(val view: OverlayView, val bounds: Rect)
 
@@ -62,9 +61,11 @@ class OverlayManager(private val context: Context, private val config: ConfigRep
         val viewH = view.measuredHeight.coerceAtLeast(40)
         val safeW = (dw() - edgePad * 2).coerceAtLeast(minW)
         val w = viewW.coerceIn(minW, safeW)
-        val x = (bounds.centerX() - w / 2).coerceIn(edgePad, (dw() - w - edgePad).coerceAtLeast(edgePad))
+        val x = (bounds.centerX() - w / 2 + (cfg.horizontalOffsetDp * density).toInt())
+            .coerceIn(edgePad, (dw() - w - edgePad).coerceAtLeast(edgePad))
 
         val offsetPx = (cfg.verticalOffsetDp * density).toInt()
+        val gapPx = (cfg.overlayGapDp * density).toInt()
         val y = when (cfg.overlayPosition) {
             OverlayPosition.ABOVE  -> bounds.top - viewH - gapPx + offsetPx
             OverlayPosition.INLINE -> bounds.centerY() - viewH / 2 + offsetPx
@@ -99,7 +100,7 @@ class OverlayManager(private val context: Context, private val config: ConfigRep
                 }
                 .onFailure { e ->
                     pool.release(view)
-                    Log.w("OverlayManager", "addView: ${e.javaClass.simpleName}")
+                    Log.w("OverlayManager", "addView ${e.javaClass.simpleName} key=$key x=$x y=$y w=$w h=$viewH pos=${cfg.overlayPosition}")
                 }
         }
         pendingShow[key] = showTask

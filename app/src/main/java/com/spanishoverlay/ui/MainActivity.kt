@@ -1,6 +1,7 @@
 package com.spanishoverlay.ui
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -50,6 +51,8 @@ import com.spanishoverlay.data.PoS
 import com.spanishoverlay.service.SpanishOverlayService
 import com.spanishoverlay.util.isAccessibilityServiceEnabled
 import kotlinx.coroutines.launch
+
+private data class AppChoice(val label: String, val pkg: String)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -108,7 +111,7 @@ fun SettingsScreen(repo: ConfigRepository, learning: LearningRepository) {
     ) {
         // Status
         item {
-            StatusCard(serviceOn) {
+            StatusCard(serviceOn, cfg) {
                 ctx.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
             }
         }
@@ -150,16 +153,10 @@ fun SettingsScreen(repo: ConfigRepository, learning: LearningRepository) {
             }
         }
         item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = cfg.phrasesEnabled, onCheckedChange = { repo.update { copy(phrasesEnabled = it) } })
-                Text("Show phrases (buenos días, etc.)", modifier = Modifier.padding(start = 4.dp))
-            }
+            ToggleRow(cfg.phrasesEnabled, "Show phrases (buenos días, etc.)") { repo.update { copy(phrasesEnabled = it) } }
         }
         item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = cfg.stopWordsEnabled, onCheckedChange = { repo.update { copy(stopWordsEnabled = it) } })
-                Text("Skip common words (a, the, is…)", modifier = Modifier.padding(start = 4.dp))
-            }
+            ToggleRow(cfg.stopWordsEnabled, "Skip common words (a, the, is…)") { repo.update { copy(stopWordsEnabled = it) } }
         }
 
         item { SectionHeader("Appearance") }
@@ -186,8 +183,18 @@ fun SettingsScreen(repo: ConfigRepository, learning: LearningRepository) {
             }
         }
         item {
-            LabeledSlider("Vertical offset: ${cfg.verticalOffsetDp}dp", cfg.verticalOffsetDp.toFloat(), -30f, 30f) {
+            LabeledSlider("Horizontal offset: ${cfg.horizontalOffsetDp}dp", cfg.horizontalOffsetDp.toFloat(), -60f, 60f) {
+                repo.update { copy(horizontalOffsetDp = it.toInt()) }
+            }
+        }
+        item {
+            LabeledSlider("Vertical offset: ${cfg.verticalOffsetDp}dp", cfg.verticalOffsetDp.toFloat(), -60f, 60f) {
                 repo.update { copy(verticalOffsetDp = it.toInt()) }
+            }
+        }
+        item {
+            LabeledSlider("Anchor gap: ${cfg.overlayGapDp}dp", cfg.overlayGapDp.toFloat(), 0f, 24f) {
+                repo.update { copy(overlayGapDp = it.toInt()) }
             }
         }
         item {
@@ -239,12 +246,7 @@ fun SettingsScreen(repo: ConfigRepository, learning: LearningRepository) {
                 }
             }
             item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = cfg.allowOverlayOverlap, onCheckedChange = {
-                        repo.update { copy(allowOverlayOverlap = it) }
-                    })
-                    Text("Allow overlapping overlays", modifier = Modifier.padding(start = 4.dp))
-                }
+                ToggleRow(cfg.allowOverlayOverlap, "Allow overlapping overlays") { repo.update { copy(allowOverlayOverlap = it) } }
             }
 
             item { SectionHeader("Advanced Filters") }
@@ -254,12 +256,7 @@ fun SettingsScreen(repo: ConfigRepository, learning: LearningRepository) {
                 }
             }
             item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = cfg.normalizationEnabled, onCheckedChange = {
-                        repo.update { copy(normalizationEnabled = it) }
-                    })
-                    Text("Light normalization for inflections", modifier = Modifier.padding(start = 4.dp))
-                }
+                ToggleRow(cfg.normalizationEnabled, "Light normalization for inflections") { repo.update { copy(normalizationEnabled = it) } }
             }
             item { PosCheckboxRow(cfg) { repo.update(it) } }
             item { StopWordsEditor(cfg.stopWords) { repo.update { copy(stopWords = it) } } }
@@ -291,20 +288,10 @@ fun SettingsScreen(repo: ConfigRepository, learning: LearningRepository) {
                 }
             }
             item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = cfg.rescanAfterClearEvents, onCheckedChange = {
-                        repo.update { copy(rescanAfterClearEvents = it) }
-                    })
-                    Text("Re-scan after scroll/window clear events", modifier = Modifier.padding(start = 4.dp))
-                }
+                ToggleRow(cfg.rescanAfterClearEvents, "Re-scan after scroll/window clear events") { repo.update { copy(rescanAfterClearEvents = it) } }
             }
             item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = cfg.selectedTextActionsEnabled, onCheckedChange = {
-                        repo.update { copy(selectedTextActionsEnabled = it) }
-                    })
-                    Text("Selected-text actions", modifier = Modifier.padding(start = 4.dp))
-                }
+                ToggleRow(cfg.selectedTextActionsEnabled, "Selected-text actions") { repo.update { copy(selectedTextActionsEnabled = it) } }
             }
 
             item { SectionHeader("Excluded Apps") }
@@ -402,7 +389,7 @@ private fun LearningEntry.toSelection() = LearningSelection(
 )
 
 @Composable
-fun StatusCard(serviceOn: Boolean, onEnable: () -> Unit) {
+fun StatusCard(serviceOn: Boolean, cfg: OverlayConfig, onEnable: () -> Unit) {
     val ctx = LocalContext.current
     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(
         containerColor = if (serviceOn) MaterialTheme.colorScheme.primaryContainer
@@ -420,6 +407,11 @@ fun StatusCard(serviceOn: Boolean, onEnable: () -> Unit) {
                     "Tap to open Accessibility Settings",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onErrorContainer
+                )
+                Text(
+                    "Package ${ctx.packageName} • ${cfg.excludePackages.size} excluded • ${cfg.stopWords.size} stop words • x ${cfg.horizontalOffsetDp}dp / y ${cfg.verticalOffsetDp}dp / gap ${cfg.overlayGapDp}dp",
+                    fontSize = 12.sp,
+                    color = if (serviceOn) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer
                 )
             }
             if (!serviceOn) {
@@ -511,6 +503,14 @@ fun LabeledSlider(label: String, value: Float, min: Float, max: Float, onChange:
 }
 
 @Composable
+fun ToggleRow(checked: Boolean, label: String, onCheckedChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
+        Text(label, modifier = Modifier.padding(start = 4.dp))
+    }
+}
+
+@Composable
 fun PosCheckboxRow(cfg: OverlayConfig, onUpdate: (OverlayConfig.() -> OverlayConfig) -> Unit) {
     val posOptions = listOf(PoS.NOUN to "Nouns", PoS.VERB to "Verbs",
         PoS.ADJECTIVE to "Adj", PoS.ADVERB to "Adv")
@@ -583,7 +583,24 @@ fun StopWordsEditor(words: Set<String>, onUpdate: (Set<String>) -> Unit) {
 
 @Composable
 fun ExcludedAppsEditor(packages: Set<String>, onUpdate: (Set<String>) -> Unit) {
+    val ctx = LocalContext.current
     var input by remember { mutableStateOf(TextFieldValue("")) }
+    val apps = remember {
+        runCatching {
+            val pm = ctx.packageManager
+            pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), PackageManager.MATCH_ALL)
+                .mapNotNull {
+                    val pkg = it.activityInfo?.packageName ?: return@mapNotNull null
+                    AppChoice(it.loadLabel(pm).toString().ifBlank { pkg }, pkg)
+                }
+                .distinctBy { it.pkg }
+                .sortedWith(compareBy(AppChoice::label, AppChoice::pkg))
+        }.getOrDefault(emptyList())
+    }
+    val query = input.text.trim()
+    val suggestions = remember(apps, packages, query) {
+        apps.filter { it.pkg !in packages && (query.isBlank() || it.label.contains(query, true) || it.pkg.contains(query, true)) }.take(8)
+    }
 
     Column {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -598,6 +615,19 @@ fun ExcludedAppsEditor(packages: Set<String>, onUpdate: (Set<String>) -> Unit) {
                 val pkg = input.text.trim()
                 if (pkg.isNotBlank()) { onUpdate(packages + pkg); input = TextFieldValue("") }
             }) { Icon(Icons.Default.Add, "Add") }
+        }
+        if (suggestions.isNotEmpty()) {
+            Spacer(Modifier.height(4.dp))
+            suggestions.forEach { app ->
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.weight(1f)) {
+                        Text(app.label, fontSize = 13.sp)
+                        Text(app.pkg, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    TextButton(onClick = { onUpdate(packages + app.pkg); input = TextFieldValue("") }) { Text("Block") }
+                }
+            }
+            HorizontalDivider()
         }
         packages.sorted().forEach { pkg ->
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
